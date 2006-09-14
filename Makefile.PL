@@ -16,6 +16,7 @@ WriteMakefile(
       'HTML::Form' => 0,
       Carp => 0,
       'Test::More' => 0,
+      'SMS::Send' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'SMS-Send-DE-MeinBMW-*' },

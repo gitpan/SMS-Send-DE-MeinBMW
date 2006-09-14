@@ -1,7 +1,7 @@
 package SMS::Send::DE::MeinBMW;
 
 BEGIN {
-  $VERSION = '0.01';
+  $VERSION = '0.02';
 }
 
 use base 'SMS::Send::Driver';
