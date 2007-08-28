@@ -1,7 +1,7 @@
 package SMS::Send::DE::MeinBMW;
 
 BEGIN {
-  $VERSION = '0.02';
+  $VERSION = '0.03';
 }
 
 use base 'SMS::Send::Driver';
@@ -15,9 +15,9 @@ use HTML::Form;
 use Carp;
 
 my $RE_BADLOGIN = qr/Verbleibende Versuche/;
-
-my $login_page = 'https://www.meinbmw.de/user_login/html/PreLogin.jsp';
-my $post_login = 'https://www.meinbmw.de/dispatcher.jsp?goal=_access';
+my $post_login  = 'https://www.meinbmw.de/dispatcher.jsp?goal=_access';
+my $root_page   = 'https://www.meinbmw.de';
+my $login_page  = 'https://www.meinbmw.de/process';
 
 my $sms_page =
   'https://www.meinbmw.de/dispatcher.jsp?goal=smsversand&view=index.jsp';
@@ -63,7 +63,15 @@ sub _get_login {
   $ua->cookie_jar( HTTP::Cookies->new );
 
   # get a cookie!
-  my $res = $ua->request( GET $login_page );
+  my $res = $ua->request(
+                          POST $login_page,
+                          [
+                            module => 'login',
+                            action => 'login',
+                            N      => $self->{login},
+                            P      => $self->{password}
+                          ]
+  );
 
   $res->is_success || Carp::croak("HTTP Error: $login_page");
 
@@ -80,9 +88,7 @@ sub _send_login {
   $self->_get_login;
 
   # Submit the login form
-  my $res = $self->{ua}->request( POST $post_login,
-                                [ N => $self->{login}, P => $self->{password} ],
-                                [ Referer => $login_page ] );
+  my $res = $self->{ua}->request( GET $post_login );
 
   $res->is_success || Carp::croak("HTTP Error: $post_login");
 
@@ -108,7 +114,7 @@ sub send_sms {
   # Make sure we are logged in
   $self->_send_login;
 
-  my $ua         = $self->{ua};
+  my $ua = $self->{ua};
   my $free_chars = do { use bytes; 160 - length($message) };
 
   # fill the sms
@@ -138,7 +144,7 @@ sub send_sms {
 # Internal
 
 sub _LOGIN {
-  my $class = ref $_[0] ? ref shift: shift;
+  my $class = ref $_[0] ? ref shift : shift;
   my $email = shift;
   unless ( defined $email ) {
     Carp::croak("Did not provide a login emailaddress");
@@ -150,7 +156,7 @@ sub _LOGIN {
 }
 
 sub _PASSWORD {
-  my $class = ref $_[0] ? ref shift: shift;
+  my $class = ref $_[0] ? ref shift : shift;
   my $password = shift;
   unless ( defined $password and !ref $password and length $password ) {
     Carp::croak("Did not provide a password");
@@ -160,7 +166,7 @@ sub _PASSWORD {
 
 sub _MESSAGE {
   use bytes;
-  my $class = ref $_[0] ? ref shift: shift;
+  my $class = ref $_[0] ? ref shift : shift;
   my $message = shift;
   unless ( length($message) <= 160 ) {
     Carp::croak("Message length limit is 160 characters");
@@ -169,12 +175,12 @@ sub _MESSAGE {
 }
 
 sub _TO {
-  my $class = ref $_[0] ? ref shift: shift;
-  my $to    = shift;
+  my $class = ref $_[0] ? ref shift : shift;
+  my $to = shift;
 
   # International numbers need their + removed
   $to =~ y/0123456789//cd;
-  
+
   return $to;
 }
 
@@ -188,7 +194,7 @@ SMS::Send::DE::MeinBMW - An SMS::Send driver for the www.meinbmw.de website
 
 =head1 VERSION
 
-This document describes SMS::Send::DE::MeinBMW version 0.01
+This document describes SMS::Send::DE::MeinBMW version 0.03
 
 
 =head1 SYNOPSIS
@@ -279,6 +285,13 @@ Or contact the author.
 
 Boris Zentner  C<< <bzm@2bz.de> >>
 
+=HEAD1 CREDITS 
+
+Fixes, Bug Reports, Docs have been generously provided by:
+
+  Oleg Fiksel
+
+thanks!
 
 =head1 LICENCE AND COPYRIGHT
 
