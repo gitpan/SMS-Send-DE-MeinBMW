@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                SMS-Send-DE-MeinBMW
-version:             0.03
+version:             0.04
 abstract:            An SMS::Send driver for the www.meinbmw.de website
 license:             ~
 generated_by:        ExtUtils::MakeMaker version 6.32
