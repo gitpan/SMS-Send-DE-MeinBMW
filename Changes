@@ -1,4 +1,6 @@
 Revision history for SMS-Send-DE-MeinBMW
+0.05   Thu Jun 19 03:06:37 CEST 2008
+        Make cpan testers happy
 
 0.04   Wed Aug 29 12:11:52 CEST 2007
 	Fix typo in =head1 ( wrong case )
