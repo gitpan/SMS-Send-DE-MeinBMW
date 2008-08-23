@@ -1,7 +1,7 @@
 package SMS::Send::DE::MeinBMW;
 
 BEGIN {
-  $VERSION = '0.05';
+  $VERSION = '0.06';
 }
 
 use base 'SMS::Send::Driver';
@@ -14,15 +14,11 @@ use HTTP::Cookies;
 use HTML::Form;
 use Carp;
 
-my $RE_BADLOGIN = qr/Verbleibende Versuche/;
-my $post_login  = 'https://www.meinbmw.de/dispatcher.jsp?goal=_access';
+my $RE_BADLOGIN = qr/Sie konnten nicht authentifiziert werden/;
 my $root_page   = 'https://www.meinbmw.de';
-my $login_page  = 'https://www.meinbmw.de/process';
-
+my $login_page  = 'https://www.meinbmw.de/Home/tabid/36/ctl/Login/Default.aspx';
 my $sms_page =
-  'https://www.meinbmw.de/dispatcher.jsp?goal=smsversand&view=index.jsp';
-my $post_sms =
-'https://www.meinbmw.de/contentDispatcher.jsp?goal=smsversand&view=submit.jsp';
+'https://www.meinbmw.de/DownloadsServices/Services/SMSService/tabid/80/Default.aspx';
 
 sub new {
   my $class  = shift;
@@ -39,6 +35,7 @@ sub new {
 
   # lie about the agent
   $ua->agent('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)');
+  $ua->cookie_jar( HTTP::Cookies->new );
 
   # Create the object, saving any private params for later
   my $self = bless {
@@ -59,23 +56,27 @@ sub _get_login {
 
   my $ua = $self->{ua};
 
-  # we need cookies
-  $ua->cookie_jar( HTTP::Cookies->new );
+  #get session code and cookies!
+  my $res = $ua->request( POST $login_page);
 
-  # get a cookie!
-  my $res = $ua->request(
-                          POST $login_page,
-                          [
-                            module => 'login',
-                            action => 'login',
-                            N      => $self->{login},
-                            P      => $self->{password}
-                          ]
-  );
+  $res->is_success || Carp::croak("HTTP Error: $login_page\n$res->status_line");
 
-  $res->is_success || Carp::croak("HTTP Error: $login_page");
+  my $html = $res->content;
+  my $f = HTML::Form->parse( $html, $login_page );
 
-  return 1;
+  for ( $f->param ) {
+    $f->find_input($_)->value( $self->{login} )    if /username$/i;
+    $f->find_input($_)->value( $self->{password} ) if /password$/i;
+  }
+
+  $res = $ua->request( $f->click );
+
+  if ( $res->is_success && $res->content =~ /logout/i ) {
+    return 1;
+  }
+  else { Carp::croak( "Couldn't log in: ", $res->status_line ); }
+
+  return 0;
 }
 
 sub _send_login {
@@ -88,9 +89,9 @@ sub _send_login {
   $self->_get_login;
 
   # Submit the login form
-  my $res = $self->{ua}->request( GET $post_login );
+  my $res = $self->{ua}->request( GET $login_page );
 
-  $res->is_success || Carp::croak("HTTP Error: $post_login");
+  $res->is_success || Carp::croak("HTTP Error: $login_page");
 
   if ( $res->content =~ $RE_BADLOGIN ) {
     Carp::croak('Invalid login and/or password');
@@ -114,27 +115,29 @@ sub send_sms {
   # Make sure we are logged in
   $self->_send_login;
 
-  my $ua = $self->{ua};
   my $free_chars = do { use bytes; 160 - length($message) };
 
-  # fill the sms
-  my $res = $ua->request(
-                          POST $post_sms,
-                          [
-                            phone   => $recipient,
-                            subject => $message,
-                            anzahl  => $free_chars
-                          ],
-                          [ Referer => $sms_page ]
-  );
+  my $res = $self->{ua}->request( GET $sms_page);
 
-  # yes, we really want to send the message.
-  my $req = HTML::Form->parse($res)->click;
-  $res = $ua->request($req);
+  $res->is_success || Carp::croak("HTTP Error: $sms_page\n$res->status_line");
 
+  my $html = $res->content;
+
+  my $f = HTML::Form->parse( $html, $sms_page );
+
+  for ( $f->param ) {
+    $f->find_input($_)->value($recipient) if /phone$/i;
+    $f->find_input($_)->value($message)   if /subject$/i;
+  }
+
+  $res = $self->{ua}->request( $f->click );
+  
   unless ( $res->is_success ) {
     Carp::croak("HTTP request returned failure when sending SMS request");
   }
+
+  # Check if the SMS limit isn't reached
+  return 0 unless $res->{_content} =~ /Ihre SMS wurde an .+ versendet/i;
 
   # Fire-and-forget, we don't know for sure.
   return 1;
@@ -194,7 +197,7 @@ SMS::Send::DE::MeinBMW - An SMS::Send driver for the www.meinbmw.de website
 
 =head1 VERSION
 
-This document describes SMS::Send::DE::MeinBMW version 0.03
+This document describes SMS::Send::DE::MeinBMW version 0.06
 
 
 =head1 SYNOPSIS
